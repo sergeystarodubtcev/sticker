@@ -577,9 +577,9 @@ function lotCard(it){
   var acts=el('div','acts');
   var b1=el('button','primary'); b1.textContent='＋ На лист';
   b1.onclick=function(){ addItem(fromLib(it), +($('lotQty').value)||1); };
-  var b2=el('button'); b2.textContent='✎'; b2.title='Открыть / изменить';
+  var b2=el('button','edit-only'); b2.textContent='✎'; b2.title='Изменить лот';
   b2.onclick=function(){ openLot(it); };
-  var b3=el('button','danger'); b3.textContent='✕'; b3.title='Удалить из базы';
+  var b3=el('button','danger edit-only'); b3.textContent='✕'; b3.title='Удалить из базы';
   b3.onclick=function(){
     var nm=titleOf(it);
     if(!confirm('Удалить лот «'+nm+'» из базы?\n'+subOf(it))) return;
@@ -590,8 +590,8 @@ function lotCard(it){
   return a;
 }
 function openLot(it){
-  formSet(fromLib(it)); editIdx=-1; editLotId=it.id; resetAddBtn();
-  setView('make'); toast('Лот в форме — можно печатать или править');
+  formSet(fromLib(it)); editIdx=-1; editLotId=canEdit()?it.id:''; resetAddBtn();
+  setView('make'); toast(canEdit()?'Лот в форме — можно печатать или править':'Лот в форме — можно печатать');
 }
 function renderLib(){
   renderRoasters(); lotStats();
@@ -622,7 +622,7 @@ function initLots(){
   function step(id,d){ var i=$(id); i.value=Math.max(1,Math.min(200,(+i.value||1)+d)); }
   $('qMinus').onclick=function(){ step('lotQty',-1); }; $('qPlus').onclick=function(){ step('lotQty',1); };
   $('fMinus').onclick=function(){ step('qty',-1); };    $('fPlus').onclick=function(){ step('qty',1); };
-  $('btnNewLot').onclick=function(){ formSet(blank()); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
+  $('btnNewLot').onclick=function(){ if(!needEdit()) return; formSet(blank()); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
 }
 
 /* ---------- экраны ---------- */
@@ -659,6 +659,7 @@ function initActions(){
     addItem(it, +($('qty').value)||1);
   };
   $('btnSave').onclick=function(){
+    if(!needEdit()) return;
     var it=formGet();   // все поля, включая те, что этот тип не печатает (пустые — тоже)
     if(isEmpty(it)){ toast('Пустая карточка'); return; }
     var same=-1, cur=editLotId&&lotById(editLotId);
@@ -679,6 +680,7 @@ function initActions(){
   };
   $('btnSheetClear').onclick=function(){ if(confirm('Очистить лист «'+S.name+'»?')){ SHEET=[]; editIdx=-1; resetAddBtn(); saveAll(); renderSheet(); } };
   $('btnLibClear').onclick=function(){
+    if(!needEdit()) return;
     if(!LIB.length){ toast('Библиотека пуста'); return; }
     if(!confirm('Удалить ВСЮ базу ('+LIB.length+' шт.)?'+(syncMode()!=='local'?'\nОна удалится для всех устройств.':''))) return;
     if(!confirm('Последнее предупреждение: восстановить будет нельзя (разве что из истории GitHub). Удалить всё?')) return;
@@ -693,7 +695,7 @@ function initActions(){
   $('btnSheetImp').onclick=function(){ pickFile('csv',function(txt){ var rows=parseCsv(txt),n=0;
       rows.forEach(function(r){ var q=Math.max(1,parseInt(r.qty||r['кол-во']||1,10)||1); for(var i=0;i<q;i++){ SHEET.push(rowToItem(r)); n++; } });
       saveAll(); renderSheet(); toast('Импортировано: '+n); }); };
-  $('btnLibImp').onclick=function(){ pickFile('csv',function(txt){ var rows=parseCsv(txt),n=0;
+  $('btnLibImp').onclick=function(){ if(!needEdit()) return; pickFile('csv',function(txt){ var rows=parseCsv(txt),n=0;
       var keys={}; LIB.forEach(function(x){ keys[lotKey(x)]=1; }); var skip=0;
       rows.forEach(function(r){ var it=rowToItem(r); if(isEmpty(it)) return;
         if(keys[lotKey(it)]){ skip++; return; } keys[lotKey(it)]=1;
@@ -1127,7 +1129,7 @@ function applyPageStyle(){ $('pageStyle').textContent='@page{size:A4 '+(S.page.o
    ====================================================================== */
 var SYNC={owner:'',repo:'',branch:'gh-pages',path:'data/lots.json',token:'',api:''};
 var SYNCED={};      // id → updated, что уже лежит на сервере (режим api)
-var DEL_PASS='';    // пароль на удаление — только в памяти, до закрытия вкладки
+var PASS='';        // пароль редактора: без него база только для чтения (проверяет сервер)
 var syncState={busy:false,again:false,timer:null,lastHash:'',lastAt:0};
 function guessRepo(){
   var h=location.hostname, m=/^([^.]+)\.github\.io$/i.exec(h);
@@ -1144,6 +1146,7 @@ function syncLoad(cfg){
   SYNC.token=saved.token||'';
   SYNC.api=String(saved.api||(cfg&&cfg.api)||'').trim().replace(/\/+$/,'');
   SYNCED=ls('sk_synced')||{};
+  try{ PASS=localStorage.getItem('sk_editor')||''; }catch(_){ PASS=''; }
 }
 function syncMode(){ return SYNC.api?'api':(SYNC.token&&SYNC.owner&&SYNC.repo?'gh':'local'); }
 
@@ -1156,11 +1159,18 @@ function api(body){
       if(!r.ok) { var e=new Error(j.error||('Сервер: '+r.status)); e.status=r.status; throw e; }
       return j; }); });
 }
+// без пароля база — зеркало сервера; с паролем — сливаем и досылаем своё
 function adoptServerDoc(doc){
-  // лоты, которых сервер не принял (удалены паролем) — убираются через doc.deleted
-  mergeDoc(doc);
+  if(!canEdit()){
+    var before=libHash();
+    (doc.custom||[]).forEach(function(f){ if(f&&f.k&&!fieldDef(f.k)){ CUSTOM.push(f); TYPES.forEach(function(t){ if(!t.fields[f.k]) t.fields[f.k]=Object.assign(defPos(f),{on:0}); }); } });
+    rebuildFields();
+    LIB=(doc.lots||[]).map(function(x){ return Object.assign({},x); }); DELETED=Object.assign({},doc.deleted||{});
+    if(before!==libHash()){ syncState.quiet=true; saveAll(); syncState.quiet=false; rebuildForm(); renderLib(); }
+  } else mergeDoc(doc);
   SYNCED={}; (doc.lots||[]).forEach(function(x){ SYNCED[x.id]=x.updated; }); ls('sk_synced',SYNCED);
 }
+function okPill(){ var t=new Date(); setPill('ok','синхр. '+pad(t.getHours())+':'+pad(t.getMinutes())); }
 function apiSync(manual){
   if(!navigator.onLine){ setPill('err','офлайн'); return Promise.resolve(); }
   if(syncState.busy){ syncState.again=true; return Promise.resolve(); }
@@ -1169,13 +1179,13 @@ function apiSync(manual){
   // при первом запуске сначала берём свежую базу, потом досылаем только своё
   var first=syncState.lastAt?Promise.resolve():api(null).then(adoptServerDoc);
   return first.then(function(){
-    pend=pendingLots();
-    return pend.length?api({lots:pend,custom:CUSTOM}):(syncState.lastAt?api(null):null);
+    pend=canEdit()?pendingLots():[];
+    return pend.length?api({lots:pend,custom:CUSTOM,password:PASS}):(syncState.lastAt?api(null):null);
   }).then(function(doc){
-    if(doc) adoptServerDoc(doc); syncState.lastAt=Date.now();
-    var t=new Date(); setPill('ok','синхр. '+pad(t.getHours())+':'+pad(t.getMinutes()));
+    if(doc) adoptServerDoc(doc); syncState.lastAt=Date.now(); okPill();
     if(manual) toast(pend.length?'Отправлено лотов: '+pend.length:'База актуальна');
   }).catch(function(e){
+    if(e.status===403 && PASS){ setPass(''); toast('Пароль больше не подходит — войди заново'); }
     setPill('err','ошибка синхр.'); var i=$('syncInfo'); if(i) i.textContent='Ошибка: '+e.message;
     if(manual) toast(e.message);
   }).then(function(){
@@ -1183,30 +1193,49 @@ function apiSync(manual){
     if(syncState.again){ syncState.again=false; scheduleSync(800); }
   });
 }
-function askDelPass(){
-  if(DEL_PASS) return DEL_PASS;
-  var p=prompt('Удаление из общей базы — введи пароль:','');
-  return p?p.trim():'';
+
+/* ---------- вход редактора ---------- */
+function canEdit(){ return syncMode()!=='api' || !!PASS; }
+function needEdit(){ if(canEdit()) return true; toast('Нужен пароль редактора — нажми «Войти»'); return false; }
+function setPass(p){ PASS=p||''; try{ if(PASS) localStorage.setItem('sk_editor',PASS); else localStorage.removeItem('sk_editor'); }catch(_){} applyRole(); }
+function applyRole(){
+  var ro=!canEdit(), api=syncMode()==='api';
+  document.body.classList.toggle('ro',ro);
+  var b=$('btnLogin'); if(b){ b.style.display=api?'':'none';
+    b.innerHTML=ro?'🔒<span class="hide-sm"> Войти</span>':'🔓<span class="hide-sm"> Редактор</span>';
+    b.title=ro?'Войти с паролем, чтобы добавлять и править лоты':'Режим редактора — нажми, чтобы выйти'; }
+  var n=$('roNote'); if(n) n.style.display=(ro&&api)?'':'none';
+  if(ro && (editLotId||'')) { editLotId=''; resetAddBtn(); }
+  renderLib();
 }
-// удалить лоты: в общей базе — только с паролем (проверяет сервер)
+function login(){
+  if(!navigator.onLine){ toast('Для входа нужен интернет'); return; }
+  var p=prompt('Пароль редактора:',''); if(!p||!p.trim()) return; p=p.trim();
+  api({check:true,password:p}).then(function(j){
+    if(!j||j.ok!==true){ toast('На сервере старый код — обнови воркер (worker/sync-worker.js)'); return; }
+    setPass(p); toast('Готово: можно добавлять, править и удалять'); scheduleSync(300);
+  }).catch(function(e){ toast(e.status===403?'Неверный пароль':e.message); });
+}
+function logout(){
+  if(!confirm('Выйти из режима редактора на этом устройстве?')) return;
+  setPass(''); syncState.lastAt=0; syncNow(false); toast('Только просмотр');
+}
+// удалить лоты: в общей базе — только редактор (пароль проверяет сервер)
 function deleteLots(list,all){
   if(syncMode()!=='api'){
     list.forEach(removeLot); saveAll(); renderLib();
     return Promise.resolve(true);
   }
+  if(!needEdit()) return Promise.resolve(false);
   if(!navigator.onLine){ toast('Удалять можно только с интернетом'); return Promise.resolve(false); }
-  var pass=askDelPass(); if(!pass) return Promise.resolve(false);
   setPill('busy','удаляю…');
-  var body=all?{deleteAll:true,password:pass}:{delete:list.map(function(x){ return x.id; }),password:pass};
+  var body=all?{deleteAll:true,password:PASS}:{delete:list.map(function(x){ return x.id; }),password:PASS};
   return api(body).then(function(doc){
-    DEL_PASS=pass; adoptServerDoc(doc); renderLib();
-    var t=new Date(); setPill('ok','синхр. '+pad(t.getHours())+':'+pad(t.getMinutes()));
-    return true;
+    adoptServerDoc(doc); renderLib(); okPill(); return true;
   }).catch(function(e){
-    if(e.status===403) DEL_PASS='';
-    setPill(e.status===403?'ok':'err',e.status===403?'пароль неверный':'ошибка синхр.');
-    toast(e.status===403?'Неверный пароль — лот не удалён':e.message);
-    return false;
+    if(e.status===403){ setPass(''); toast('Пароль больше не подходит — войди заново'); }
+    else toast(e.message);
+    setPill('err','ошибка синхр.'); return false;
   });
 }
 function syncSave(){ ls('sk_sync',SYNC); }
@@ -1314,7 +1343,7 @@ function syncNow(manual){
 function scheduleSync(ms){ clearTimeout(syncState.timer); syncState.timer=setTimeout(function(){ syncNow(false); },ms||2500); }
 function libChanged(){
   if(syncState.quiet) return;
-  if(syncMode()==='api'){ if(pendingLots().length){ setPill('busy','ждёт отправки'); scheduleSync(1500); } return; }
+  if(syncMode()==='api'){ if(canEdit()&&pendingLots().length){ setPill('busy','ждёт отправки'); scheduleSync(1500); } return; }
   if(!SYNC.token) return;
   if(libHash()!==syncState.lastHash){ setPill('busy','ждёт отправки'); scheduleSync(); }
 }
@@ -1331,6 +1360,7 @@ function initSync(){
     SYNC.api=$('syApi').value.trim().replace(/\/+$/,'');
     syncSave(); syncUiFill(); syncNow(true);
   };
+  $('btnLogin').onclick=function(){ if(PASS) logout(); else login(); };
   $('btnSyncForget').onclick=function(){ SYNC.token=''; syncSave(); syncUiFill(); setPill('','локально'); toast('Токен удалён из этого браузера'); };
   $('syncPill').onclick=function(){
     if(syncMode()==='local'){ openModal(); document.querySelector('.tabs button[data-tab="sync"]').click(); return; }
@@ -1394,6 +1424,7 @@ function init(){
     syncLoad(cfg);
     return loadPublicDb();
   }).then(function(){
+    applyRole();
     syncState.lastHash=SYNC.token?'':libHash();
     if(syncMode()!=='local') syncNow(false); else setPill('','локально');
   });

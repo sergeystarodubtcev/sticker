@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="app.css">
 <style id="pageStyle">@page{size:A4 landscape;margin:0}</style>
 </head>
-<body data-view="lots">
+<body data-view="lots" class="ro">
 
 <header class="top noprint">
   <a class="brand" href="#lots" data-go="lots">
@@ -34,6 +34,7 @@
   <span class="sp"></span>
   <button class="syncpill" id="syncPill" title="Синхронизация базы с GitHub"><i></i><span>локально</span></button>
   <button class="ghost icon hide-sm" id="btnInstall" style="display:none" title="Установить приложение">⤓ Установить</button>
+  <button class="ghost icon" id="btnLogin" style="display:none">🔒<span class="hide-sm"> Войти</span></button>
   <button class="ghost icon" id="btnSettings" title="Настройки">⚙<span class="hide-sm"> Настройки</span></button>
 </header>
 
@@ -45,8 +46,9 @@
       <div>
         <h1>База лотов</h1>
         <p class="muted" id="lotStats">—</p>
+        <p class="muted" id="roNote" style="display:none">👀 Только просмотр и печать. Чтобы добавлять и править лоты, нажми «🔒 Войти».</p>
       </div>
-      <button class="primary lg" id="btnNewLot">＋ Новый лот</button>
+      <button class="primary lg edit-only" id="btnNewLot">＋ Новый лот</button>
     </div>
 
     <div class="toolbar card">
@@ -87,8 +89,8 @@
 
     <div class="lib-foot">
       <button class="sm ghost" id="btnLibCsv">⬇ CSV базы</button>
-      <button class="sm ghost" id="btnLibImp">⬆ Импорт CSV</button>
-      <button class="sm ghost danger" id="btnLibClear">Очистить базу</button>
+      <button class="sm ghost edit-only" id="btnLibImp">⬆ Импорт CSV</button>
+      <button class="sm ghost danger edit-only" id="btnLibClear">Очистить базу</button>
     </div>
   </section>
 
@@ -107,7 +109,7 @@
         <div class="actions">
           <button class="primary" id="btnAdd">＋ На лист</button>
           <div class="stepper small"><button type="button" id="fMinus">−</button><input type="number" id="qty" value="1" min="1" max="200" title="Сколько копий"><button type="button" id="fPlus">＋</button></div>
-          <button class="accent" id="btnSave">💾 В базу</button>
+          <button class="accent edit-only" id="btnSave">💾 В базу</button>
           <button class="ghost sm" id="btnClearForm">Очистить</button>
         </div>
         <div class="hint hide-sm">Enter — следующее поле, с последнего — добавить на лист. Ctrl+Enter — добавить сразу.</div>

@@ -1,16 +1,17 @@
 /**
  * Сервер синхронизации базы лотов (Cloudflare Worker).
  *
- * Токен GitHub и пароль на удаление хранятся ТОЛЬКО здесь, в секретах воркера,
- * поэтому на сайте их не видно.
- *   GET  /lots                              → вся база
- *   POST /lots {lots:[…], custom:[…]}       → добавить/обновить лоты (может любой)
- *   POST /lots {delete:[id…], password}     → удалить лоты (только с паролем)
- *   POST /lots {deleteAll:true, password}   → очистить базу (только с паролем)
+ * Токен GitHub и пароль хранятся ТОЛЬКО здесь, в секретах воркера,
+ * поэтому на сайте их не видно. Читать базу может любой, менять — только с паролем.
+ *   GET  /lots                                        → вся база
+ *   POST /lots {check:true, password}                 → проверить пароль
+ *   POST /lots {lots:[…], custom:[…], password}       → добавить/обновить лоты
+ *   POST /lots {delete:[id…], password}               → удалить лоты
+ *   POST /lots {deleteAll:true, password}             → очистить базу
  *
  * Секреты (Settings → Variables and Secrets):
  *   GH_TOKEN         — fine-grained токен GitHub, Contents: Read and write на репозиторий
- *   DELETE_PASSWORD  — пароль на удаление
+ *   DELETE_PASSWORD  — пароль редактора (на добавление, правку и удаление)
  * Переменные (необязательно):
  *   GH_REPO          — по умолчанию sergeystarodubtcev/sticker
  *   GH_BRANCH        — по умолчанию gh-pages
@@ -50,14 +51,13 @@ export default {
 
       const body = await req.json().catch(() => null);
       if (!body || typeof body !== 'object') return reply({ error: 'Пустой запрос' }, 400);
-      const wantsDelete = body.deleteAll === true || (Array.isArray(body.delete) && body.delete.length > 0);
-      if (wantsDelete) {
-        if (!env.DELETE_PASSWORD) return reply({ error: 'На сервере не задан пароль на удаление' }, 500);
-        if (!(await sameText(String(body.password || ''), env.DELETE_PASSWORD))) {
-          await new Promise((r) => setTimeout(r, 1500)); // притормозить перебор
-          return reply({ error: 'Неверный пароль' }, 403);
-        }
+      // любое изменение базы — только с паролем
+      if (!env.DELETE_PASSWORD) return reply({ error: 'На сервере не задан пароль' }, 500);
+      if (!(await sameText(String(body.password || ''), env.DELETE_PASSWORD))) {
+        await new Promise((r) => setTimeout(r, 1500)); // притормозить перебор
+        return reply({ error: body.password ? 'Неверный пароль' : 'Нужен пароль редактора' }, 403);
       }
+      if (body.check === true) return reply({ ok: true });
       const lots = sanitizeLots(body.lots);
       const custom = sanitizeCustom(body.custom);
       const delIds = Array.isArray(body.delete) ? body.delete.filter((x) => typeof x === 'string' && ID_RE.test(x)) : [];
