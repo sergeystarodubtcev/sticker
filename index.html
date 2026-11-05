@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Кофейные наклейки</title>
+<meta name="description" content="База кофейных лотов и конструктор наклеек для печати">
+<meta name="theme-color" content="#f6f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16120f" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Наклейки">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;700&family=Jost:wght@400;500;600;700&family=PT+Sans+Narrow:wght@400;700&family=Rubik:wght@400;500;700&family=Caveat:wght@500;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style id="pageStyle">@page{size:A4 landscape;margin:0}</style>
+</head>
+<body data-view="lots">
+
+<header class="top noprint">
+  <a class="brand" href="#lots" data-go="lots">
+    <img src="assets/icons/icon-192.png" alt="" width="34" height="34">
+    <span><b>Кофейные наклейки</b><small>база лотов · печать</small></span>
+  </a>
+  <nav class="toptabs">
+    <button data-go="lots">Лоты</button>
+    <button data-go="make">Конструктор</button>
+  </nav>
+  <span class="sp"></span>
+  <button class="syncpill" id="syncPill" title="Синхронизация базы с GitHub"><i></i><span>локально</span></button>
+  <button class="ghost icon hide-sm" id="btnInstall" style="display:none" title="Установить приложение">⤓ Установить</button>
+  <button class="ghost icon" id="btnSettings" title="Настройки">⚙<span class="hide-sm"> Настройки</span></button>
+</header>
+
+<main class="app">
+
+  <!-- ================= ЛОТЫ ================= -->
+  <section class="view" id="view-lots">
+    <div class="hero">
+      <div>
+        <h1>База лотов</h1>
+        <p class="muted" id="lotStats">—</p>
+      </div>
+      <button class="primary lg" id="btnNewLot">＋ Новый лот</button>
+    </div>
+
+    <div class="toolbar card">
+      <div class="search">
+        <span>⌕</span>
+        <input type="search" id="lotSearch" placeholder="Поиск: название, страна, обработка…" autocomplete="off">
+      </div>
+      <div class="tb-row">
+        <label class="sel"><span>Группы</span>
+          <select id="lotGroup">
+            <option value="roaster">по обжарщикам</option>
+            <option value="month">по месяцу обжарки</option>
+            <option value="country">по странам</option>
+            <option value="none">без групп</option>
+          </select>
+        </label>
+        <label class="sel"><span>Сортировка</span>
+          <select id="lotSort">
+            <option value="added">сначала новые лоты</option>
+            <option value="roast_desc">обжарка: свежие</option>
+            <option value="roast_asc">обжарка: старые</option>
+            <option value="pack_desc">упаковка: последние</option>
+            <option value="name">название А→Я</option>
+            <option value="q">Q-балл ↓</option>
+          </select>
+        </label>
+        <div class="stepper" title="Сколько копий добавлять на лист">
+          <span>копий</span>
+          <button type="button" id="qMinus">−</button>
+          <input type="number" id="lotQty" value="1" min="1" max="200">
+          <button type="button" id="qPlus">＋</button>
+        </div>
+      </div>
+      <div class="chips" id="libRoasters"></div>
+    </div>
+
+    <div id="lotsList"></div>
+
+    <div class="lib-foot">
+      <button class="sm ghost" id="btnLibCsv">⬇ CSV базы</button>
+      <button class="sm ghost" id="btnLibImp">⬆ Импорт CSV</button>
+      <button class="sm ghost danger" id="btnLibClear">Очистить базу</button>
+    </div>
+  </section>
+
+  <div class="work">
+    <!-- ================= КОНСТРУКТОР ================= -->
+    <section class="view" id="view-make">
+      <div class="card">
+        <div class="card-h">
+          <h2 id="formTitle">Новая наклейка</h2>
+          <span class="badge clickable" id="typeBadge" title="Тип наклейки — сменить в настройках"></span>
+        </div>
+        <div class="make-grid">
+          <div id="formPreviewWrap"><div id="formPreview"></div></div>
+          <div id="form"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btnAdd">＋ На лист</button>
+          <div class="stepper small"><button type="button" id="fMinus">−</button><input type="number" id="qty" value="1" min="1" max="200" title="Сколько копий"><button type="button" id="fPlus">＋</button></div>
+          <button class="accent" id="btnSave">💾 В базу</button>
+          <button class="ghost sm" id="btnClearForm">Очистить</button>
+        </div>
+        <div class="hint hide-sm">Enter — следующее поле, с последнего — добавить на лист. Ctrl+Enter — добавить сразу.</div>
+      </div>
+    </section>
+
+    <!-- ================= ЛИСТ ================= -->
+    <section class="view" id="view-sheet">
+      <div class="card sheet-card">
+        <div class="card-h">
+          <h2>Лист А4 <span class="badge" id="counter">0</span></h2>
+          <div class="wrap">
+            <button class="primary" id="btnPrint">🖨 Печать</button>
+            <button id="btnPdf">⬇ PDF</button>
+            <button id="btnPng">⬇ PNG</button>
+          </div>
+        </div>
+        <details class="sheetlist">
+          <summary>Список наклеек на листе</summary>
+          <ul class="list" id="sheetList"></ul>
+        </details>
+        <div class="wrap tools-row">
+          <button class="sm ghost" id="btnFill">⧉ Заполнить страницу</button>
+          <button class="sm ghost" id="btnSheetCsv">⬇ CSV листа</button>
+          <button class="sm ghost" id="btnSheetImp">⬆ CSV → лист</button>
+          <button class="sm ghost danger" id="btnSheetClear">🗑 Очистить</button>
+        </div>
+      </div>
+      <div id="sheetWrap"><div id="sheetScale"><div id="pages"></div></div></div>
+    </section>
+  </div>
+</main>
+
+<nav class="bottomnav noprint">
+  <button data-go="lots"><i>☕</i><span>Лоты</span></button>
+  <button data-go="make"><i>✎</i><span>Наклейка</span></button>
+  <button data-go="sheet"><i>▦</i><span>Лист</span><b class="nb" id="navCount"></b></button>
+  <button id="navSettings"><i>⚙</i><span>Настройки</span></button>
+</nav>
+
+<!-- SETTINGS MODAL -->
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="modal-h">
+      <h1>Настройки</h1>
+      <button class="primary" id="btnDone">Готово</button>
+    </div>
+    <div class="typebar">
+      <span class="hint">Тип наклейки:</span>
+      <select id="typeSel"></select>
+      <button class="sm" id="btnTypeNew" title="Создать новый тип">＋ Новый</button>
+      <button class="sm" id="btnTypeRen" title="Переименовать">✎</button>
+      <button class="sm danger" id="btnTypeDel" title="Удалить тип">🗑</button>
+    </div>
+    <div class="tabs">
+      <button data-tab="pos" class="on">Поля</button>
+      <button data-tab="page">Лист А4</button>
+      <button data-tab="sync">Синхронизация</button>
+      <button data-tab="misc">Прочее</button>
+    </div>
+
+    <div class="setgrid" id="tab-pos">
+      <div class="c2">
+        <div id="prevLabel"></div>
+        <div class="hint" style="margin-top:6px">Перетащи текст мышью/пальцем. Стрелки — точно (Shift — крупнее).</div>
+        <div class="subsec">
+          <h3>Фон наклейки</h3>
+          <div class="hint" id="bgInfo"></div>
+          <div class="wrap" style="margin-top:6px">
+            <button class="sm" id="btnBgDl">⬇ Скачать фон</button>
+            <button class="sm" id="btnBgUp">⬆ Загрузить новый</button>
+            <button class="sm ghost" id="btnBgReset">↺ Стандартный</button>
+          </div>
+        </div>
+      </div>
+      <div class="c1">
+        <label class="fl">Поле</label>
+        <select id="selField"></select>
+        <div class="wrap" style="margin-top:8px;align-items:center">
+          <label class="check"><input type="checkbox" id="fOn"> печатать на этом типе</label>
+          <span style="flex:1"></span>
+          <button class="sm" id="btnFieldAdd">＋ Новое поле</button>
+          <button class="sm danger" id="btnFieldDel">Удалить поле</button>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <div><label class="fl">X, %</label><input type="number" id="fX" step="0.2"></div>
+          <div><label class="fl">Y от низа, %</label><input type="number" id="fB" step="0.2"></div>
+          <div><label class="fl">Ширина, %</label><input type="number" id="fW" step="0.5"></div>
+          <div><label class="fl">Размер, %</label><input type="number" id="fS" step="0.1"></div>
+          <div><label class="fl">Выравнивание</label>
+            <select id="fA"><option value="left">слева</option><option value="center">по центру</option><option value="right">справа</option></select>
+          </div>
+          <div style="display:flex;align-items:flex-end"><button class="sm" id="btnResetField">Сбросить поле</button></div>
+        </div>
+        <hr>
+        <div class="grid2">
+          <div><label class="fl">Шрифт текста</label>
+            <select id="setFont">
+              <option value="Georgia,serif">Georgia</option>
+              <option value="'Jost',Arial,sans-serif">Jost</option>
+              <option value="system">Системный</option>
+              <option value="'PT Sans Narrow',Arial,sans-serif">PT Sans Narrow (узкий)</option>
+              <option value="'Roboto Condensed',Arial,sans-serif">Roboto Condensed</option>
+              <option value="'Rubik',Arial,sans-serif">Rubik</option>
+              <option value="'Caveat',cursive">Caveat (рукописный)</option>
+            </select>
+          </div>
+          <div><label class="fl">Цвет текста</label><input type="color" id="setColor"></div>
+          <div><label class="fl">Насыщенность</label>
+            <select id="setWeight"><option value="400">обычный</option><option value="500">средний (500)</option><option value="600">полужирный</option><option value="700">жирный</option></select>
+          </div>
+          <div><label class="fl">Наклон</label>
+            <select id="setItalic"><option value="0">прямой</option><option value="1">курсив</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-page" style="display:none">
+      <div class="grid2" style="max-width:640px">
+        <div><label class="fl">Ориентация</label>
+          <select id="pOrient"><option value="landscape">альбомная</option><option value="portrait">книжная</option></select></div>
+        <div><label class="fl">Ширина наклейки, мм</label><input type="number" id="pLw" step="1" min="20" max="200"></div>
+        <div><label class="fl">Колонок</label><input type="number" id="pCols" min="1" max="12"></div>
+        <div><label class="fl">Строк</label><input type="number" id="pRows" min="1" max="12"></div>
+        <div><label class="fl">Зазор по гориз., мм</label><input type="number" id="pGx" step="0.5" min="0"></div>
+        <div><label class="fl">Зазор по верт., мм</label><input type="number" id="pGy" step="0.5" min="0"></div>
+        <div><label class="fl">Поле слева/справа, мм</label><input type="number" id="pMx" step="0.5" min="0"></div>
+        <div><label class="fl">Поле сверху, мм</label><input type="number" id="pMy" step="0.5" min="0"></div>
+        <div><label class="fl">Линии реза</label><select id="pCut"><option value="0">нет</option><option value="1">да</option></select></div>
+        <div style="display:flex;align-items:flex-end"><button class="sm" id="btnAutoFit">Подобрать макс. кол-во</button></div>
+      </div>
+      <div class="hint" id="pageInfo" style="margin-top:8px"></div>
+    </div>
+
+    <div id="tab-sync" style="display:none">
+      <div class="syncbox">
+        <p>База лотов хранится в репозитории на GitHub в файле <code id="syncPathShow">data/lots.json</code>. Сайт читает её всем. Чтобы <b>добавлять и менять</b> лоты с любого устройства (телефон, ноут), вставь сюда токен GitHub. Он хранится только в этом браузере.</p>
+        <ol class="hint">
+          <li>Открой <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a>.</li>
+          <li>Repository access → <b>Only select repositories</b> → твой репозиторий.</li>
+          <li>Permissions → Repository → <b>Contents: Read and write</b>. Создай токен и вставь ниже.</li>
+        </ol>
+        <div class="grid2" style="max-width:640px">
+          <div><label class="fl">Владелец (owner)</label><input id="syOwner" autocomplete="off"></div>
+          <div><label class="fl">Репозиторий</label><input id="syRepo" autocomplete="off"></div>
+          <div><label class="fl">Ветка</label><input id="syBranch" autocomplete="off"></div>
+          <div><label class="fl">Файл базы</label><input id="syPath" autocomplete="off"></div>
+          <div style="grid-column:1/-1"><label class="fl">Токен GitHub</label><input id="syToken" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+        </div>
+        <div class="wrap" style="margin-top:10px">
+          <button class="primary" id="btnSyncNow">⟳ Сохранить и синхронизировать</button>
+          <button class="sm ghost danger" id="btnSyncForget">Забыть токен</button>
+        </div>
+        <div class="hint" id="syncInfo" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div id="tab-misc" style="display:none">
+      <div class="grid2" style="max-width:640px">
+        <div><label class="fl">Формат даты («сегодня»)</label>
+          <select id="setDate"><option value="dd.mm.yyyy">31.12.2026</option><option value="dd.mm.yy">31.12.26</option><option value="yyyy-mm-dd">2026-12-31</option></select></div>
+        <div><label class="fl">Рамки полей (на экране)</label>
+          <select id="setGuides"><option value="0">нет</option><option value="1">да</option></select></div>
+        <div><label class="fl">Тема</label>
+          <select id="setTheme"><option value="">как в системе</option><option value="light">светлая</option><option value="dark">тёмная</option></select></div>
+      </div>
+      <div class="wrap" style="margin-top:14px">
+        <button class="sm" id="btnExpSet">⬇ Экспорт настроек (JSON)</button>
+        <button class="sm" id="btnImpSet">⬆ Импорт настроек</button>
+        <button class="sm danger" id="btnResetAll">Сбросить настройки этого типа</button>
+      </div>
+      <div class="subsec">
+        <h3>Приложение на телефон</h3>
+        <p class="hint"><b>Android (Chrome):</b> меню ⋮ → «Установить приложение» или кнопка ниже.<br>
+        <b>iPhone (Safari):</b> «Поделиться» → «На экран Домой».<br>Приложение работает и без интернета; база подтянется, когда сеть появится.</p>
+        <button class="sm" id="btnInstall2" style="display:none">⤓ Установить приложение</button>
+      </div>
+      <div class="hint" style="margin-top:10px">Типы наклеек, раскладка и лист хранятся в этом браузере. База лотов — общая, на GitHub.</div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="filePick" accept=".csv,.json,text/csv,application/json" style="display:none">
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
