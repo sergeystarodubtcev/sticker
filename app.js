@@ -99,16 +99,15 @@ function presetType(p,id){
 }
 function defBg(t){ return (t&&t.presetBg)||BASE_IMG; }
 function defDims(t){ var p=t&&t.pid&&presetById(t.pid); return p?{w:p.bgW,h:p.bgH}:{w:DEF_W,h:DEF_H}; }
-// новые шаблоны добавляются один раз; удалённые пользователем не возвращаются сами
+// готовые шаблоны всегда есть в списке типов; не возвращаются только те, что пользователь удалил сам
 function seedPresets(force){
-  var seen=ls('sk_presets')||[], n=0;
+  var removed=force?[]:(ls('sk_presets_removed')||[]), n=0;
+  if(force) ls('sk_presets_removed',[]);
   PRESETS.forEach(function(p){
-    if(!force && seen.indexOf(p.pid)>=0) return;
+    if(removed.indexOf(p.pid)>=0) return;
     if(TYPES.some(function(t){ return t.pid===p.pid; })) return;
     var t=presetType(p); TYPES.push(t); SHEETS[t.id]=[]; n++;
-    if(seen.indexOf(p.pid)<0) seen.push(p.pid);
   });
-  ls('sk_presets',seen);
   return n;
 }
 function useType(id){
@@ -865,32 +864,6 @@ function renderTypeSel(){
   TYPES.forEach(function(t){ var o=document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o); });
   sel.value=CUR;
   $('typeBadge').textContent='🏷 '+S.name;
-  renderTplStrip();
-}
-function tplThumb(t,img){
-  if(t.bg){ idbGet(t.bg).then(function(d){ img.src=d||defBg(t); }).catch(function(){ img.src=defBg(t); }); }
-  else img.src=defBg(t);
-}
-function renderTplStrip(){
-  var host=$('tplStrip');
-  if(host){
-    host.innerHTML='';
-    TYPES.forEach(function(t){
-      var b=el('button','tpl'+(t.id===CUR?' on':'')); b.type='button'; b.title=t.name;
-      var im=el('img'); im.alt=''; im.loading='lazy'; tplThumb(t,im);
-      if(t.bgW>t.bgH*1.2) b.classList.add('wide');
-      var sp=el('span'); sp.textContent=t.name;
-      b.appendChild(im); b.appendChild(sp);
-      b.onclick=function(){ switchType(t.id); };
-      host.appendChild(b);
-    });
-    var add=el('button','tpl add'); add.type='button'; add.innerHTML='<i>＋</i><span>Свой</span>'; add.title='Новый тип наклейки';
-    add.onclick=function(){ createType(); };
-    host.appendChild(add);
-    var on=host.querySelector('.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'});
-  }
-  var ls2=$('lotTpl');
-  if(ls2){ ls2.innerHTML=''; TYPES.forEach(function(t){ var o=document.createElement('option'); o.value=t.id; o.textContent=t.name; ls2.appendChild(o); }); ls2.value=CUR; }
 }
 function refreshAfterSwitch(){
   editIdx=-1; resetAddBtn();
@@ -924,6 +897,7 @@ function deleteType(){
   if(TYPES.length<2){ toast('Это единственный тип — удалить нельзя'); return; }
   if(!confirm('Удалить тип «'+S.name+'» вместе с его листом?\nБиблиотека останется.')) return;
   var id=CUR, bg=S.bg;
+  if(S.pid){ var rm=ls('sk_presets_removed')||[]; if(rm.indexOf(S.pid)<0){ rm.push(S.pid); ls('sk_presets_removed',rm); } }
   TYPES=TYPES.filter(function(t){ return t.id!==id; });
   delete SHEETS[id];
   if(bg) idbDel(bg).catch(function(){});
@@ -1123,7 +1097,6 @@ function initSettings(){
   };
   $('btnExpSet').onclick=exportSettings;
   $('btnPresets').onclick=function(){ var n=seedPresets(true); saveAll(); renderTypeSel(); toast(n?'Вернул шаблонов: '+n:'Все шаблоны на месте'); };
-  $('lotTpl').onchange=function(){ switchType(this.value); };
   $('btnImpSet').onclick=function(){ pickFile('json',function(txt){
     try{ importSettings(txt); }catch(e){ toast('Файл не читается'); } }); };
   $('btnResetAll').onclick=function(){
