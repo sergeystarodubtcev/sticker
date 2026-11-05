@@ -29,6 +29,7 @@ jobs:
         run: |
           mkdir -p site/data
           if [ ! -f site/data/lots.json ]; then cp src/data/lots.json site/data/lots.json; fi
+          cp src/data/site.json site/data/site.json
           cp -r src/index.html src/app.css src/app.js src/sw.js src/manifest.webmanifest src/.nojekyll src/assets site/
           printf '{"owner":"%s","repo":"%s","branch":"gh-pages"}\n' "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" > site/data/config.json
           sed -i "s/var VERSION = 'v1'/var VERSION = '${GITHUB_SHA::8}'/" site/sw.js

@@ -251,22 +251,30 @@
 
     <div id="tab-sync" style="display:none">
       <div class="syncbox">
-        <p>База лотов хранится в репозитории на GitHub в файле <code id="syncPathShow">data/lots.json</code>. Сайт читает её всем. Чтобы <b>добавлять и менять</b> лоты с любого устройства (телефон, ноут), вставь сюда токен GitHub. Он хранится только в этом браузере.</p>
-        <ol class="hint">
-          <li>Открой <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a>.</li>
-          <li>Repository access → <b>Only select repositories</b> → твой репозиторий.</li>
-          <li>Permissions → Repository → <b>Contents: Read and write</b>. Создай токен и вставь ниже.</li>
-        </ol>
-        <div class="grid2" style="max-width:640px">
-          <div><label class="fl">Владелец (owner)</label><input id="syOwner" autocomplete="off"></div>
-          <div><label class="fl">Репозиторий</label><input id="syRepo" autocomplete="off"></div>
-          <div><label class="fl">Ветка</label><input id="syBranch" autocomplete="off"></div>
-          <div><label class="fl">Файл базы</label><input id="syPath" autocomplete="off"></div>
-          <div style="grid-column:1/-1"><label class="fl">Токен GitHub</label><input id="syToken" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+        <p>Сейчас: <b id="syncMode">—</b></p>
+        <p>Общая база лотов лежит на GitHub (<code id="syncPathShow">data/lots.json</code>). Сайт пишет в неё через <b>сервер синхронизации</b>: добавлять и править лоты может любой, а удалять только с паролем. Токен и пароль хранятся на сервере, на сайте их не видно.</p>
+        <div style="max-width:640px">
+          <label class="fl">Адрес сервера синхронизации</label>
+          <input id="syApi" autocomplete="off" placeholder="https://….workers.dev">
+          <div class="hint" style="margin-top:4px">Обычно уже прописан в сайте. Поле нужно, только чтобы попробовать другой сервер на этом устройстве.</div>
         </div>
-        <div class="wrap" style="margin-top:10px">
+        <details class="subsec">
+          <summary><b>Режим владельца: личный токен GitHub</b> (без сервера, пароль не спрашивается)</summary>
+          <ol class="hint" style="margin-top:8px">
+            <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a>, Only select repositories → свой репозиторий.</li>
+            <li>Permissions → Repository → <b>Contents: Read and write</b>. Токен хранится только в этом браузере.</li>
+          </ol>
+          <div class="grid2" style="max-width:640px">
+            <div><label class="fl">Владелец (owner)</label><input id="syOwner" autocomplete="off"></div>
+            <div><label class="fl">Репозиторий</label><input id="syRepo" autocomplete="off"></div>
+            <div><label class="fl">Ветка</label><input id="syBranch" autocomplete="off"></div>
+            <div><label class="fl">Файл базы</label><input id="syPath" autocomplete="off"></div>
+            <div style="grid-column:1/-1"><label class="fl">Токен GitHub</label><input id="syToken" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+          </div>
+          <button class="sm ghost danger" id="btnSyncForget" style="margin-top:8px">Забыть токен</button>
+        </details>
+        <div class="wrap" style="margin-top:12px">
           <button class="primary" id="btnSyncNow">⟳ Сохранить и синхронизировать</button>
-          <button class="sm ghost danger" id="btnSyncForget">Забыть токен</button>
         </div>
         <div class="hint" id="syncInfo" style="margin-top:8px"></div>
       </div>
