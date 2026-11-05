@@ -510,7 +510,6 @@ function sortLots(list){
     added:function(a,b){ return String(b.added).localeCompare(String(a.added)); },
     roast_desc:function(a,b){ return (parseD(b.roast)||0)-(parseD(a.roast)||0); },
     roast_asc:function(a,b){ return (parseD(a.roast)||9e15)-(parseD(b.roast)||9e15); },
-    pack_desc:function(a,b){ return (parseD(b.pack)||0)-(parseD(a.pack)||0); },
     name:function(a,b){ return cmpRu(titleOf(a),titleOf(b)); },
     q:function(a,b){ return (parseQ(b.q)||0)-(parseQ(a.q)||0); }
   }[LOT_SORT]||function(){ return 0; };
@@ -566,7 +565,6 @@ function lotCard(it){
   var extra=CUSTOM.map(function(f){ var v=String(it[f.k]||'').trim(); return v?esc(f.label)+': '+esc(v):''; }).filter(Boolean);
   var dates='';
   if(it.roast) dates+='<span title="Дата обжарки">🔥 '+esc(it.roast)+freshTag(it)+'</span>';
-  if(it.pack) dates+='<span title="Дата упаковки (в базе)">📦 '+esc(it.pack)+'</span>';
   a.innerHTML=
     '<div class="top"><span class="rst">'+esc(it.roaster||'—')+'</span>'+
       ((qs&&qs!=='-')?'<span class="q'+(qn>=87?' hi':'')+'" title="Q-балл">Q '+esc(qs)+'</span>':'')+'</div>'+
@@ -613,7 +611,7 @@ function renderLib(){
 }
 function initLots(){
   var pr=ls('sk_lotprefs')||{};
-  LOT_SORT=pr.sort||'added'; LOT_GROUP=pr.group||'roaster'; COLLAPSED=ls('sk_collapsed')||{};
+  LOT_SORT=(pr.sort&&pr.sort!=='pack_desc')?pr.sort:'added'; LOT_GROUP=pr.group||'roaster'; COLLAPSED=ls('sk_collapsed')||{};
   $('lotSort').value=LOT_SORT; $('lotGroup').value=LOT_GROUP;
   function savePr(){ ls('sk_lotprefs',{sort:LOT_SORT,group:LOT_GROUP}); }
   $('lotSort').onchange=function(){ LOT_SORT=this.value; savePr(); renderLib(); };
@@ -622,7 +620,7 @@ function initLots(){
   function step(id,d){ var i=$(id); i.value=Math.max(1,Math.min(200,(+i.value||1)+d)); }
   $('qMinus').onclick=function(){ step('lotQty',-1); }; $('qPlus').onclick=function(){ step('lotQty',1); };
   $('fMinus').onclick=function(){ step('qty',-1); };    $('fPlus').onclick=function(){ step('qty',1); };
-  $('btnNewLot').onclick=function(){ if(!needEdit()) return; formSet(blank()); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
+  $('btnNewLot').onclick=function(){ if(!needEdit()) return; var nb=blank(); nb.pack=today(); formSet(nb); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
 }
 
 /* ---------- экраны ---------- */
@@ -646,8 +644,10 @@ function resetAddBtn(){
   t.textContent=editIdx>=0?'Правим наклейку №'+(editIdx+1):(lot?'Лот: '+titleOf(lot):'Новая наклейка');
   t.classList.toggle('editing',editIdx>=0||!!lot);
 }
+// дата упаковки — всегда на момент печати: пустая → сегодня
 function addItem(it,n){
   n=Math.max(1,Math.min(200,n||1));
+  it=copy(it); if(!String(it.pack||'').trim()) it.pack=today();
   for(var i=0;i<n;i++) SHEET.push(copy(it));
   saveAll(); renderSheet(); toast('На лист добавлено: '+n+' · всего '+SHEET.length);
 }
@@ -661,11 +661,12 @@ function initActions(){
   $('btnSave').onclick=function(){
     if(!needEdit()) return;
     var it=formGet();   // все поля, включая те, что этот тип не печатает (пустые — тоже)
+    delete it.pack;     // дата упаковки в базе не хранится — ставится сегодняшняя при печати
     if(isEmpty(it)){ toast('Пустая карточка'); return; }
     var same=-1, cur=editLotId&&lotById(editLotId);
     if(cur) same=LIB.indexOf(cur);
     else LIB.forEach(function(x,i){ if(same<0&&titleOf(x)===titleOf(it)&&x.roaster===it.roaster) same=i; });
-    if(same>=0){ LIB[same]=Object.assign({},LIB[same],it,{updated:nowIso()}); editLotId=LIB[same].id; }
+    if(same>=0){ LIB[same]=Object.assign({},LIB[same],it,{updated:nowIso()}); delete LIB[same].pack; editLotId=LIB[same].id; }
     else { var n=ensureLotMeta(Object.assign({},it,{added:nowIso()})); LIB.unshift(n); editLotId=n.id; }
     saveAll(); renderLib(); resetAddBtn(); toast(same>=0?'Лот обновлён в базе':'Новый лот в базе');
   };
@@ -697,7 +698,7 @@ function initActions(){
       saveAll(); renderSheet(); toast('Импортировано: '+n); }); };
   $('btnLibImp').onclick=function(){ if(!needEdit()) return; pickFile('csv',function(txt){ var rows=parseCsv(txt),n=0;
       var keys={}; LIB.forEach(function(x){ keys[lotKey(x)]=1; }); var skip=0;
-      rows.forEach(function(r){ var it=rowToItem(r); if(isEmpty(it)) return;
+      rows.forEach(function(r){ var it=rowToItem(r); delete it.pack; if(isEmpty(it)) return;
         if(keys[lotKey(it)]){ skip++; return; } keys[lotKey(it)]=1;
         LIB.unshift(ensureLotMeta(Object.assign(it,{added:nowIso()}))); n++; });
       saveAll(); renderLib(); toast('В базу: '+n+(skip?' (дубли пропущены: '+skip+')':'')); }); };
