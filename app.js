@@ -277,11 +277,25 @@ function buildForm(){
       b.onclick=function(){ i.value=today(); renderPreview(); };
       r.appendChild(b);
     }
+    if(f.k==='m'){
+      i.placeholder='вес — жми 1 (15 г) или 2 (30 г)';
+      WEIGHTS.forEach(function(wv,wi){
+        var b=el('button','sm'); b.type='button'; b.textContent=wv; b.title='Клавиша '+(wi+1);
+        b.onclick=function(){ i.value=wv; setWeight(wv,true); renderPreview(); };
+        r.appendChild(b);
+      });
+    }
     d.appendChild(r);
     var sg=null;
     if(AC_KEYS[f.k]){ sg=el('div','sugg'); d.appendChild(sg); }
     w.appendChild(d);
     i.addEventListener('keydown',function(e){
+      // вес: в пустом поле «1» → 15 г, «2» → 30 г и сразу к следующему полю
+      if(f.k==='m' && !i.value && (e.key==='1'||e.key==='2') && !e.ctrlKey && !e.metaKey && !e.altKey){
+        e.preventDefault(); i.value=WEIGHTS[+e.key-1]; setWeight(i.value,true); renderPreview();
+        var nx=$('in_'+(FIELDS[fi+1]||{}).k); if(nx){ nx.focus(); nx.select(); }
+        return;
+      }
       if(e.key==='Tab'||e.key==='Enter'){ var s2=inp_sugg(i); if(s2) s2.classList.remove('on'); }
       if(e.key!=='Enter') return;
       e.preventDefault();
@@ -473,7 +487,24 @@ function removeLot(it){
 }
 
 // из базы — дата упаковки всегда сегодняшняя
-function fromLib(it){ var o=copy(it); o.pack=today(); return o; }
+function fromLib(it){ var o=copy(it); o.pack=today(); o.m=WEIGHT; return o; }
+// граммовка выбирается при печати: 15/30 г, клавиши 1 и 2
+var WEIGHTS=['15 г','30 г'], WEIGHT='30 г';
+function setWeight(v,quiet){
+  WEIGHT=v; ls('sk_weight',v);
+  document.querySelectorAll('#weightSel button').forEach(function(b){ b.classList.toggle('on',b.dataset.w===v); });
+  if(!quiet) toast('Граммовка: '+v);
+}
+function initWeight(){
+  var w=ls('sk_weight'); setWeight(WEIGHTS.indexOf(w)>=0?w:'30 г',true);
+  document.querySelectorAll('#weightSel button').forEach(function(b){ b.onclick=function(){ setWeight(b.dataset.w); }; });
+  document.addEventListener('keydown',function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey||(e.key!=='1'&&e.key!=='2')) return;
+    var a=document.activeElement; if(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)) return;
+    if($('modal').classList.contains('open')) return;
+    setWeight(WEIGHTS[+e.key-1]);
+  });
+}
 var LIB_ROASTER='', LOT_Q='', LOT_SORT='added', LOT_GROUP='roaster', COLLAPSED={};
 function cmpRu(a,b){ return String(a).localeCompare(String(b),'ru',{sensitivity:'base',numeric:true}); }
 function parseD(s){
@@ -561,7 +592,7 @@ function lotStats(){
 function lotCard(it){
   var a=el('article','lot');
   var qn=parseQ(it.q), qs=String(it.q||'').trim();
-  var meta=[it.country,it.process,it.m].map(function(x){ return String(x||'').trim(); }).filter(function(x){ return x && x!=='-' && x!=='_'; });
+  var meta=[it.country,it.process].map(function(x){ return String(x||'').trim(); }).filter(function(x){ return x && x!=='-' && x!=='_'; });
   var extra=CUSTOM.map(function(f){ var v=String(it[f.k]||'').trim(); return v?esc(f.label)+': '+esc(v):''; }).filter(Boolean);
   var dates='';
   if(it.roast) dates+='<span title="Дата обжарки">🔥 '+esc(it.roast)+freshTag(it)+'</span>';
@@ -610,6 +641,7 @@ function renderLib(){
   });
 }
 function initLots(){
+  initWeight();
   var pr=ls('sk_lotprefs')||{};
   LOT_SORT=(pr.sort&&pr.sort!=='pack_desc')?pr.sort:'added'; LOT_GROUP=pr.group||'roaster'; COLLAPSED=ls('sk_collapsed')||{};
   $('lotSort').value=LOT_SORT; $('lotGroup').value=LOT_GROUP;
@@ -620,7 +652,7 @@ function initLots(){
   function step(id,d){ var i=$(id); i.value=Math.max(1,Math.min(200,(+i.value||1)+d)); }
   $('qMinus').onclick=function(){ step('lotQty',-1); }; $('qPlus').onclick=function(){ step('lotQty',1); };
   $('fMinus').onclick=function(){ step('qty',-1); };    $('fPlus').onclick=function(){ step('qty',1); };
-  $('btnNewLot').onclick=function(){ if(!needEdit()) return; var nb=blank(); nb.pack=today(); formSet(nb); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
+  $('btnNewLot').onclick=function(){ if(!needEdit()) return; var nb=blank(); nb.pack=today(); nb.m=WEIGHT; formSet(nb); editIdx=-1; editLotId=''; resetAddBtn(); setView('make'); var f=$('in_'+FIELDS[0].k); if(f) f.focus(); };
 }
 
 /* ---------- экраны ---------- */
@@ -648,6 +680,7 @@ function resetAddBtn(){
 function addItem(it,n){
   n=Math.max(1,Math.min(200,n||1));
   it=copy(it); if(!String(it.pack||'').trim()) it.pack=today();
+  if(!String(it.m||'').trim()) it.m=WEIGHT;
   for(var i=0;i<n;i++) SHEET.push(copy(it));
   saveAll(); renderSheet(); toast('На лист добавлено: '+n+' · всего '+SHEET.length);
 }
@@ -661,12 +694,12 @@ function initActions(){
   $('btnSave').onclick=function(){
     if(!needEdit()) return;
     var it=formGet();   // все поля, включая те, что этот тип не печатает (пустые — тоже)
-    delete it.pack;     // дата упаковки в базе не хранится — ставится сегодняшняя при печати
+    delete it.pack; delete it.m;  // дата упаковки и граммовка в базе не хранятся — ставятся при печати
     if(isEmpty(it)){ toast('Пустая карточка'); return; }
     var same=-1, cur=editLotId&&lotById(editLotId);
     if(cur) same=LIB.indexOf(cur);
     else LIB.forEach(function(x,i){ if(same<0&&titleOf(x)===titleOf(it)&&x.roaster===it.roaster) same=i; });
-    if(same>=0){ LIB[same]=Object.assign({},LIB[same],it,{updated:nowIso()}); delete LIB[same].pack; editLotId=LIB[same].id; }
+    if(same>=0){ LIB[same]=Object.assign({},LIB[same],it,{updated:nowIso()}); delete LIB[same].pack; delete LIB[same].m; editLotId=LIB[same].id; }
     else { var n=ensureLotMeta(Object.assign({},it,{added:nowIso()})); LIB.unshift(n); editLotId=n.id; }
     saveAll(); renderLib(); resetAddBtn(); toast(same>=0?'Лот обновлён в базе':'Новый лот в базе');
   };
@@ -698,7 +731,7 @@ function initActions(){
       saveAll(); renderSheet(); toast('Импортировано: '+n); }); };
   $('btnLibImp').onclick=function(){ if(!needEdit()) return; pickFile('csv',function(txt){ var rows=parseCsv(txt),n=0;
       var keys={}; LIB.forEach(function(x){ keys[lotKey(x)]=1; }); var skip=0;
-      rows.forEach(function(r){ var it=rowToItem(r); delete it.pack; if(isEmpty(it)) return;
+      rows.forEach(function(r){ var it=rowToItem(r); delete it.pack; delete it.m; if(isEmpty(it)) return;
         if(keys[lotKey(it)]){ skip++; return; } keys[lotKey(it)]=1;
         LIB.unshift(ensureLotMeta(Object.assign(it,{added:nowIso()}))); n++; });
       saveAll(); renderLib(); toast('В базу: '+n+(skip?' (дубли пропущены: '+skip+')':'')); }); };
