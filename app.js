@@ -83,8 +83,33 @@ function loadAll(){
     TYPES=[t]; SHEETS={};
     var osh=ls('sk_sheet'); SHEETS[t.id]=Array.isArray(osh)?osh:[];
   }
+  var added=seedPresets();
   var c=ls('sk_curtype'); useType(typeById(c)?c:TYPES[0].id);
-  if(!Array.isArray(ts)||!ts.length) saveAll();
+  if(!Array.isArray(ts)||!ts.length||added) saveAll();
+}
+
+/* ---------- готовые шаблоны (assets/templates, рисуются tools/templates.py) ---------- */
+var PRESETS=window.PRESETS||[];
+function presetById(pid){ for(var i=0;i<PRESETS.length;i++) if(PRESETS[i].pid===pid) return PRESETS[i]; return null; }
+function presetType(p,id){
+  var t=normType(JSON.parse(JSON.stringify({v:3,font:p.font,color:p.color,weight:p.weight,italic:p.italic||0,
+    fields:p.fields,page:p.page,name:p.name})));
+  t.id=id||('p_'+p.pid); t.pid=p.pid; t.presetBg=p.bg; t.bg=null; t.bgW=p.bgW; t.bgH=p.bgH;
+  return t;
+}
+function defBg(t){ return (t&&t.presetBg)||BASE_IMG; }
+function defDims(t){ var p=t&&t.pid&&presetById(t.pid); return p?{w:p.bgW,h:p.bgH}:{w:DEF_W,h:DEF_H}; }
+// новые шаблоны добавляются один раз; удалённые пользователем не возвращаются сами
+function seedPresets(force){
+  var seen=ls('sk_presets')||[], n=0;
+  PRESETS.forEach(function(p){
+    if(!force && seen.indexOf(p.pid)>=0) return;
+    if(TYPES.some(function(t){ return t.pid===p.pid; })) return;
+    var t=presetType(p); TYPES.push(t); SHEETS[t.id]=[]; n++;
+    if(seen.indexOf(p.pid)<0) seen.push(p.pid);
+  });
+  ls('sk_presets',seen);
+  return n;
 }
 function useType(id){
   CUR=id; S=typeById(id);
@@ -123,8 +148,8 @@ function loadBg(){
   var p=t.bg ? idbGet(t.bg).catch(function(){ return null; }) : Promise.resolve(null);
   return p.then(function(data){
     if(my!==bgToken) return;
-    if(t.bg && !data){ toast('Фон типа не найден — показан стандартный'); t.bgW=DEF_W; t.bgH=DEF_H; t.bg=null; saveAll(); }
-    return applyBg(data||BASE_IMG);
+    if(t.bg && !data){ toast('Фон типа не найден — показан стандартный'); var dd=defDims(t); t.bgW=dd.w; t.bgH=dd.h; t.bg=null; saveAll(); }
+    return applyBg(data||defBg(t));
   });
 }
 function applyBg(src){
@@ -176,8 +201,8 @@ function uploadBg(){
 function resetBg(){
   if(!S.bg){ toast('И так стандартный'); return; }
   if(!confirm('Вернуть стандартный фон для «'+S.name+'»?')) return;
-  idbDel(S.bg).catch(function(){}); S.bg=null; S.bgW=DEF_W; S.bgH=DEF_H; saveAll();
-  applyBg(BASE_IMG); pageInfo(); toast('Стандартный фон');
+  var dd=defDims(S); idbDel(S.bg).catch(function(){}); S.bg=null; S.bgW=dd.w; S.bgH=dd.h; saveAll();
+  applyBg(defBg(S)); pageInfo(); toast('Стандартный фон');
 }
 
 /* ---------- utils ---------- */
@@ -840,6 +865,32 @@ function renderTypeSel(){
   TYPES.forEach(function(t){ var o=document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o); });
   sel.value=CUR;
   $('typeBadge').textContent='🏷 '+S.name;
+  renderTplStrip();
+}
+function tplThumb(t,img){
+  if(t.bg){ idbGet(t.bg).then(function(d){ img.src=d||defBg(t); }).catch(function(){ img.src=defBg(t); }); }
+  else img.src=defBg(t);
+}
+function renderTplStrip(){
+  var host=$('tplStrip');
+  if(host){
+    host.innerHTML='';
+    TYPES.forEach(function(t){
+      var b=el('button','tpl'+(t.id===CUR?' on':'')); b.type='button'; b.title=t.name;
+      var im=el('img'); im.alt=''; im.loading='lazy'; tplThumb(t,im);
+      if(t.bgW>t.bgH*1.2) b.classList.add('wide');
+      var sp=el('span'); sp.textContent=t.name;
+      b.appendChild(im); b.appendChild(sp);
+      b.onclick=function(){ switchType(t.id); };
+      host.appendChild(b);
+    });
+    var add=el('button','tpl add'); add.type='button'; add.innerHTML='<i>＋</i><span>Свой</span>'; add.title='Новый тип наклейки';
+    add.onclick=function(){ createType(); };
+    host.appendChild(add);
+    var on=host.querySelector('.on'); if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  var ls2=$('lotTpl');
+  if(ls2){ ls2.innerHTML=''; TYPES.forEach(function(t){ var o=document.createElement('option'); o.value=t.id; o.textContent=t.name; ls2.appendChild(o); }); ls2.value=CUR; }
 }
 function refreshAfterSwitch(){
   editIdx=-1; resetAddBtn();
@@ -861,7 +912,8 @@ function createType(){
     var from=S.bg; t.bg='bg_'+t.id;
     p=idbGet(from).then(function(d){ if(d) return idbSet(t.bg,d); t.bg=null; t.bgW=DEF_W; t.bgH=DEF_H; })
       .catch(function(){ t.bg=null; t.bgW=DEF_W; t.bgH=DEF_H; });
-  } else if(!base){ t.bg=null; t.bgW=DEF_W; t.bgH=DEF_H; }
+  } else if(!base){ t.bg=null; t.bgW=DEF_W; t.bgH=DEF_H; t.presetBg=null; t.pid=null; }
+  if(base) t.pid=null;  // копия — своя, «вернуть шаблоны» её не трогает
   p.then(function(){ TYPES.push(t); SHEETS[t.id]=[]; switchType(t.id); });
 }
 function renameType(){
@@ -997,13 +1049,13 @@ function importSettings(txt){
     rebuildFields();
     o.types.forEach(function(raw){
       var t=normType(raw), ex=typeById(t.id);
-      if(ex){ t.bg=ex.bg; t.bgW=ex.bgW; t.bgH=ex.bgH; TYPES[TYPES.indexOf(ex)]=t; }
+      if(ex){ t.bg=ex.bg; t.bgW=ex.bgW; t.bgH=ex.bgH; t.presetBg=ex.presetBg; t.pid=ex.pid; TYPES[TYPES.indexOf(ex)]=t; }
       else { t.bg=null; t.bgW=raw.bgW||DEF_W; t.bgH=raw.bgH||DEF_H; if(raw.bg){ t.bgW=DEF_W; t.bgH=DEF_H; } TYPES.push(t); }
     });
     useType(typeById(CUR)?CUR:TYPES[0].id);
   } else {                                           // старый формат — в текущий тип
     var n=normType(o);
-    n.id=S.id; n.name=S.name; n.bg=S.bg; n.bgW=S.bgW; n.bgH=S.bgH;
+    n.id=S.id; n.name=S.name; n.bg=S.bg; n.bgW=S.bgW; n.bgH=S.bgH; n.presetBg=S.presetBg; n.pid=S.pid;
     TYPES[TYPES.indexOf(S)]=n; useType(n.id);
   }
   saveAll(); refreshAfterSwitch(); renderPreview(); toast('Настройки загружены');
@@ -1070,11 +1122,15 @@ function initSettings(){
     p.cols=cols; p.rows=rows; saveAll(); syncSettingsUi(); renderSheet(); toast(cols+'×'+rows+' = '+(cols*rows)+' шт./стр.');
   };
   $('btnExpSet').onclick=exportSettings;
+  $('btnPresets').onclick=function(){ var n=seedPresets(true); saveAll(); renderTypeSel(); toast(n?'Вернул шаблонов: '+n:'Все шаблоны на месте'); };
+  $('lotTpl').onchange=function(){ switchType(this.value); };
   $('btnImpSet').onclick=function(){ pickFile('json',function(txt){
     try{ importSettings(txt); }catch(e){ toast('Файл не читается'); } }); };
   $('btnResetAll').onclick=function(){
     if(!confirm('Сбросить настройки типа «'+S.name+'» к заводским? Фон и лист останутся.')) return;
-    var n=normType(null); n.id=S.id; n.name=S.name; n.bg=S.bg; n.bgW=S.bgW; n.bgH=S.bgH;
+    var pr=S.pid&&presetById(S.pid);
+    var n=pr?presetType(pr,S.id):normType(null); n.id=S.id; n.name=S.name; n.bg=S.bg;
+    if(S.bg||!pr){ n.bgW=S.bgW; n.bgH=S.bgH; }
     CUSTOM.forEach(function(f){ if(S.fields[f.k]) n.fields[f.k]=S.fields[f.k]; });
     TYPES[TYPES.indexOf(S)]=n; useType(n.id); saveAll(); refreshAfterSwitch(); renderPreview();
   };

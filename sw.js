@@ -1,11 +1,13 @@
 /* Service worker: приложение работает офлайн, база подтягивается из сети, когда она есть */
-var VERSION = '2e81e5c3';
+var VERSION = '0b196212';
 var SHELL = 'shell-' + VERSION;
 var RUNTIME = 'runtime-' + VERSION;
 var ASSETS = [
   './', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'assets/label-bg.png', 'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
-  'assets/icons/maskable-512.png', 'assets/icons/apple-touch-icon.png', 'assets/icons/favicon-64.png'
+  'assets/icons/maskable-512.png', 'assets/templates/presets.js',
+  'assets/templates/minimal.png', 'assets/templates/kraft.png', 'assets/templates/espresso.png',
+  'assets/templates/round.png', 'assets/templates/tag.png', 'assets/templates/pop.png', 'assets/icons/apple-touch-icon.png', 'assets/icons/favicon-64.png'
 ];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(SHELL).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
