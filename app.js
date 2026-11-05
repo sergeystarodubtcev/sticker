@@ -584,7 +584,7 @@ function lotCard(it){
   b3.onclick=function(){
     var nm=titleOf(it);
     if(!confirm('Удалить лот «'+nm+'» из базы?\n'+subOf(it))) return;
-    removeLot(it); saveAll(); renderLib(); toast('Удалено: '+nm);
+    deleteLots([it]).then(function(ok){ if(ok) toast('Удалено: '+nm); });
   };
   acts.appendChild(b1); acts.appendChild(b2); acts.appendChild(b3); a.appendChild(acts);
   a.querySelector('h4').onclick=function(){ openLot(it); };
@@ -681,9 +681,9 @@ function initActions(){
   $('btnSheetClear').onclick=function(){ if(confirm('Очистить лист «'+S.name+'»?')){ SHEET=[]; editIdx=-1; resetAddBtn(); saveAll(); renderSheet(); } };
   $('btnLibClear').onclick=function(){
     if(!LIB.length){ toast('Библиотека пуста'); return; }
-    if(!confirm('Удалить ВСЮ базу ('+LIB.length+' шт.)?'+(SYNC.token?'\nОна удалится и на GitHub для всех устройств.':''))) return;
+    if(!confirm('Удалить ВСЮ базу ('+LIB.length+' шт.)?'+(syncMode()!=='local'?'\nОна удалится для всех устройств.':''))) return;
     if(!confirm('Последнее предупреждение: восстановить будет нельзя (разве что из истории GitHub). Удалить всё?')) return;
-    LIB.slice().forEach(removeLot); saveAll(); renderLib(); toast('База очищена');
+    deleteLots(LIB.slice(),true).then(function(ok){ if(ok) toast('База очищена'); });
   };
   $('btnPrint').onclick=function(){ setView('sheet'); setTimeout(function(){ window.print(); },60); };
   $('btnPdf').onclick=savePdf;
@@ -1152,7 +1152,9 @@ function applyPageStyle(){ $('pageStyle').textContent='@page{size:A4 '+(S.page.o
 /* ======================================================================
    СИНХРОНИЗАЦИЯ БАЗЫ С GITHUB (data/lots.json в репозитории)
    ====================================================================== */
-var SYNC={owner:'',repo:'',branch:'gh-pages',path:'data/lots.json',token:''};
+var SYNC={owner:'',repo:'',branch:'gh-pages',path:'data/lots.json',token:'',api:''};
+var SYNCED={};      // id → updated, что уже лежит на сервере (режим api)
+var DEL_PASS='';    // пароль на удаление — только в памяти, до закрытия вкладки
 var syncState={busy:false,again:false,timer:null,lastHash:'',lastAt:0};
 function guessRepo(){
   var h=location.hostname, m=/^([^.]+)\.github\.io$/i.exec(h);
@@ -1167,6 +1169,72 @@ function syncLoad(cfg){
   SYNC.branch=saved.branch||(cfg&&cfg.branch)||'gh-pages';
   SYNC.path=saved.path||'data/lots.json';
   SYNC.token=saved.token||'';
+  SYNC.api=String(saved.api||(cfg&&cfg.api)||'').trim().replace(/\/+$/,'');
+  SYNCED=ls('sk_synced')||{};
+}
+function syncMode(){ return SYNC.api?'api':(SYNC.token&&SYNC.owner&&SYNC.repo?'gh':'local'); }
+
+/* ---------- режим api: общий сервер синхронизации (worker/sync-worker.js) ---------- */
+function pendingLots(){ return LIB.filter(function(x){ return SYNCED[x.id]!==x.updated; }); }
+function api(body){
+  return fetch(SYNC.api+'/lots'+(body?'':'?t='+Date.now()),{method:body?'POST':'GET',cache:'no-store',
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined})
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok) { var e=new Error(j.error||('Сервер: '+r.status)); e.status=r.status; throw e; }
+      return j; }); });
+}
+function adoptServerDoc(doc){
+  // лоты, которых сервер не принял (удалены паролем) — убираются через doc.deleted
+  mergeDoc(doc);
+  SYNCED={}; (doc.lots||[]).forEach(function(x){ SYNCED[x.id]=x.updated; }); ls('sk_synced',SYNCED);
+}
+function apiSync(manual){
+  if(!navigator.onLine){ setPill('err','офлайн'); return Promise.resolve(); }
+  if(syncState.busy){ syncState.again=true; return Promise.resolve(); }
+  syncState.busy=true; setPill('busy','синхронизация…');
+  var pend=[];
+  // при первом запуске сначала берём свежую базу, потом досылаем только своё
+  var first=syncState.lastAt?Promise.resolve():api(null).then(adoptServerDoc);
+  return first.then(function(){
+    pend=pendingLots();
+    return pend.length?api({lots:pend,custom:CUSTOM}):(syncState.lastAt?api(null):null);
+  }).then(function(doc){
+    if(doc) adoptServerDoc(doc); syncState.lastAt=Date.now();
+    var t=new Date(); setPill('ok','синхр. '+pad(t.getHours())+':'+pad(t.getMinutes()));
+    if(manual) toast(pend.length?'Отправлено лотов: '+pend.length:'База актуальна');
+  }).catch(function(e){
+    setPill('err','ошибка синхр.'); var i=$('syncInfo'); if(i) i.textContent='Ошибка: '+e.message;
+    if(manual) toast(e.message);
+  }).then(function(){
+    syncState.busy=false;
+    if(syncState.again){ syncState.again=false; scheduleSync(800); }
+  });
+}
+function askDelPass(){
+  if(DEL_PASS) return DEL_PASS;
+  var p=prompt('Удаление из общей базы — введи пароль:','');
+  return p?p.trim():'';
+}
+// удалить лоты: в общей базе — только с паролем (проверяет сервер)
+function deleteLots(list,all){
+  if(syncMode()!=='api'){
+    list.forEach(removeLot); saveAll(); renderLib();
+    return Promise.resolve(true);
+  }
+  if(!navigator.onLine){ toast('Удалять можно только с интернетом'); return Promise.resolve(false); }
+  var pass=askDelPass(); if(!pass) return Promise.resolve(false);
+  setPill('busy','удаляю…');
+  var body=all?{deleteAll:true,password:pass}:{delete:list.map(function(x){ return x.id; }),password:pass};
+  return api(body).then(function(doc){
+    DEL_PASS=pass; adoptServerDoc(doc); renderLib();
+    var t=new Date(); setPill('ok','синхр. '+pad(t.getHours())+':'+pad(t.getMinutes()));
+    return true;
+  }).catch(function(e){
+    if(e.status===403) DEL_PASS='';
+    setPill(e.status===403?'ok':'err',e.status===403?'пароль неверный':'ошибка синхр.');
+    toast(e.status===403?'Неверный пароль — лот не удалён':e.message);
+    return false;
+  });
 }
 function syncSave(){ ls('sk_sync',SYNC); }
 function setPill(state,text){
@@ -1228,6 +1296,7 @@ function gh(method,body){
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return {status:r.status,ok:r.ok,json:j}; }); });
 }
 function syncNow(manual){
+  if(syncMode()==='api') return apiSync(manual);
   if(!SYNC.token||!SYNC.owner||!SYNC.repo){
     setPill('', 'локально'); if(manual) toast('Укажи репозиторий и токен в Настройках → Синхронизация');
     return Promise.resolve();
@@ -1271,23 +1340,27 @@ function syncNow(manual){
 }
 function scheduleSync(ms){ clearTimeout(syncState.timer); syncState.timer=setTimeout(function(){ syncNow(false); },ms||2500); }
 function libChanged(){
-  if(syncState.quiet||!SYNC.token) return;
+  if(syncState.quiet) return;
+  if(syncMode()==='api'){ if(pendingLots().length){ setPill('busy','ждёт отправки'); scheduleSync(1500); } return; }
+  if(!SYNC.token) return;
   if(libHash()!==syncState.lastHash){ setPill('busy','ждёт отправки'); scheduleSync(); }
 }
 function deviceName(){ var u=navigator.userAgent; return /iPhone|iPad/.test(u)?'iPhone':(/Android/.test(u)?'Android':(/Mac/.test(u)?'Mac':(/Windows/.test(u)?'Windows':'браузера'))); }
 function syncUiFill(){
   $('syOwner').value=SYNC.owner; $('syRepo').value=SYNC.repo; $('syBranch').value=SYNC.branch; $('syPath').value=SYNC.path;
-  $('syToken').value=SYNC.token; $('syncPathShow').textContent=SYNC.path;
+  $('syToken').value=SYNC.token; $('syncPathShow').textContent=SYNC.path; $('syApi').value=SYNC.api;
+  $('syncMode').textContent={api:'общий сервер: добавлять может любой, удалять — по паролю',gh:'личный токен GitHub (режим владельца)',local:'только этот браузер'}[syncMode()];
 }
 function initSync(){
   $('btnSyncNow').onclick=function(){
     SYNC.owner=$('syOwner').value.trim(); SYNC.repo=$('syRepo').value.trim(); SYNC.branch=$('syBranch').value.trim()||'main';
     SYNC.path=$('syPath').value.trim()||'data/lots.json'; SYNC.token=$('syToken').value.trim();
+    SYNC.api=$('syApi').value.trim().replace(/\/+$/,'');
     syncSave(); syncUiFill(); syncNow(true);
   };
   $('btnSyncForget').onclick=function(){ SYNC.token=''; syncSave(); syncUiFill(); setPill('','локально'); toast('Токен удалён из этого браузера'); };
   $('syncPill').onclick=function(){
-    if(!SYNC.token){ openModal(); document.querySelector('.tabs button[data-tab="sync"]').click(); return; }
+    if(syncMode()==='local'){ openModal(); document.querySelector('.tabs button[data-tab="sync"]').click(); return; }
     syncNow(true);
   };
   window.addEventListener('online',function(){ scheduleSync(300); });
@@ -1301,7 +1374,8 @@ function loadPublicDb(){
     .catch(function(){});
 }
 function loadSiteConfig(){
-  return fetch('data/config.json?t='+Date.now(),{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
+  function get(u){ return fetch(u+'?t='+Date.now(),{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+  return Promise.all([get('data/config.json'),get('data/site.json')]).then(function(a){ return Object.assign({},a[0]||{},a[1]||{}); });
 }
 
 /* ---------- PWA ---------- */
@@ -1348,7 +1422,7 @@ function init(){
     return loadPublicDb();
   }).then(function(){
     syncState.lastHash=SYNC.token?'':libHash();
-    if(SYNC.token) syncNow(false); else setPill('','локально');
+    if(syncMode()!=='local') syncNow(false); else setPill('','локально');
   });
 }
 init();
