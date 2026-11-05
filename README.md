@@ -16,5 +16,5 @@ Fine-grained token: https://github.com/settings/personal-access-tokens/new
 → Only select repositories → `sticker` → Permissions → Contents: **Read and write**.
 
 ## Деплой
-`.github/workflows/pages.yml` выкладывает сайт на GitHub Pages при каждом пуше
-(в т.ч. когда приложение записывает новую версию базы).
+Сайт раздаётся из ветки `gh-pages`. `.github/workflows/pages.yml` при каждом пуше кода копирует сайт в `gh-pages`,
+не трогая базу `data/lots.json` (её пишет само приложение прямо в `gh-pages`).

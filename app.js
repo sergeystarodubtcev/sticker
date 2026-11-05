@@ -1096,7 +1096,7 @@ function applyPageStyle(){ $('pageStyle').textContent='@page{size:A4 '+(S.page.o
 /* ======================================================================
    СИНХРОНИЗАЦИЯ БАЗЫ С GITHUB (data/lots.json в репозитории)
    ====================================================================== */
-var SYNC={owner:'',repo:'',branch:'main',path:'data/lots.json',token:''};
+var SYNC={owner:'',repo:'',branch:'gh-pages',path:'data/lots.json',token:''};
 var syncState={busy:false,again:false,timer:null,lastHash:'',lastAt:0};
 function guessRepo(){
   var h=location.hostname, m=/^([^.]+)\.github\.io$/i.exec(h);
@@ -1108,7 +1108,7 @@ function syncLoad(cfg){
   var g=guessRepo(), saved=ls('sk_sync')||{};
   SYNC.owner=saved.owner||(cfg&&cfg.owner)||g.owner||'';
   SYNC.repo=saved.repo||(cfg&&cfg.repo)||g.repo||'';
-  SYNC.branch=saved.branch||(cfg&&cfg.branch)||'main';
+  SYNC.branch=saved.branch||(cfg&&cfg.branch)||'gh-pages';
   SYNC.path=saved.path||'data/lots.json';
   SYNC.token=saved.token||'';
 }

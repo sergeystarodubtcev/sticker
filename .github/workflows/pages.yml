@@ -1,39 +1,43 @@
-name: Deploy to GitHub Pages
+name: Publish site to gh-pages
 
+# Код сайта собирается из рабочей ветки и кладётся в gh-pages.
+# База лотов (data/lots.json) живёт в gh-pages — её пишет само приложение,
+# поэтому при публикации она НЕ перезатирается.
 on:
   push:
     branches: [main, master, "claude/quirky-bohr-nuyv2n"]
+    paths-ignore: ["data/lots.json"]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build site
+        with: { path: src }
+      - uses: actions/checkout@v4
+        with: { ref: gh-pages, path: site }
+        continue-on-error: true
+      - name: Build
         run: |
-          mkdir -p _site
-          cp -r index.html app.css app.js sw.js manifest.webmanifest .nojekyll assets data _site/
-          OWNER="${GITHUB_REPOSITORY%%/*}"; REPO="${GITHUB_REPOSITORY#*/}"
-          printf '{"owner":"%s","repo":"%s","branch":"%s"}\n' "$OWNER" "$REPO" "$GITHUB_REF_NAME" > _site/data/config.json
-          sed -i "s/var VERSION = 'v1'/var VERSION = '${GITHUB_SHA::8}'/" _site/sw.js
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          mkdir -p site/data
+          if [ ! -f site/data/lots.json ]; then cp src/data/lots.json site/data/lots.json; fi
+          cp -r src/index.html src/app.css src/app.js src/sw.js src/manifest.webmanifest src/.nojekyll src/assets site/
+          printf '{"owner":"%s","repo":"%s","branch":"gh-pages"}\n' "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" > site/data/config.json
+          sed -i "s/var VERSION = 'v1'/var VERSION = '${GITHUB_SHA::8}'/" site/sw.js
+      - name: Push
+        working-directory: site
+        run: |
+          [ -d .git ] || { git init -q -b gh-pages; git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}"; }
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Сайт: ${GITHUB_SHA::8}"
+          git push origin HEAD:gh-pages
