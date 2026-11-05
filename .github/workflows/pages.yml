@@ -33,6 +33,8 @@ jobs:
           cp -r src/index.html src/app.css src/app.js src/sw.js src/manifest.webmanifest src/.nojekyll src/assets site/
           printf '{"owner":"%s","repo":"%s","branch":"gh-pages"}\n' "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" > site/data/config.json
           sed -i "s/var VERSION = 'v1'/var VERSION = '${GITHUB_SHA::8}'/" site/sw.js
+          V="${GITHUB_SHA::8}"
+          sed -i -E "s#(href=\"app\.css)\"#\1?v=$V\"#; s#(src=\"app\.js)\"#\1?v=$V\"#; s#(src=\"assets/templates/presets\.js)\"#\1?v=$V\"#" site/index.html
       - name: Push
         working-directory: site
         run: |

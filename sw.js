@@ -24,7 +24,7 @@ self.addEventListener('fetch', function (e) {
   var sameOrigin = url.origin === self.location.origin;
   // база и код: сначала сеть (свежая версия), без сети — кэш
   if (sameOrigin) {
-    e.respondWith(fetch(req).then(function (res) {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
       if (res.ok) { var copy = res.clone(); var key = url.pathname.indexOf('/data/') >= 0 ? new Request(url.origin + url.pathname) : req;
         caches.open(url.pathname.indexOf('/data/') >= 0 ? RUNTIME : SHELL).then(function (c) { c.put(key, copy); }); }
       return res;
