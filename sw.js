@@ -1,5 +1,5 @@
 /* Service worker: приложение работает офлайн, база подтягивается из сети, когда она есть */
-var VERSION = 'e2a12e6c';
+var VERSION = '7bf93195';
 var SHELL = 'shell-' + VERSION;
 var RUNTIME = 'runtime-' + VERSION;
 var ASSETS = [

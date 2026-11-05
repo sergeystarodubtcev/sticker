@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;700&family=Jost:wght@400;500;600;700&family=PT+Sans+Narrow:wght@400;700&family=Rubik:wght@400;500;700&family=Caveat:wght@500;700&family=Roboto+Condensed:wght@400;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=e2a12e6c">
+<link rel="stylesheet" href="app.css?v=7bf93195">
 <style id="pageStyle">@page{size:A4 landscape;margin:0}</style>
 </head>
 <body data-view="lots" class="ro">
@@ -74,6 +74,9 @@
             <option value="q">Q-балл ↓</option>
           </select>
         </label>
+        <div class="seg" id="weightSel" title="Граммовка на наклейке — клавиши 1 и 2">
+          <span>вес</span><button type="button" data-w="15 г">15 г<kbd>1</kbd></button><button type="button" data-w="30 г">30 г<kbd>2</kbd></button>
+        </div>
         <div class="stepper" title="Сколько копий добавлять на лист">
           <span>копий</span>
           <button type="button" id="qMinus">−</button>
@@ -308,7 +311,7 @@
 <input type="file" id="filePick" accept=".csv,.json,text/csv,application/json" style="display:none">
 <div class="toast" id="toast"></div>
 
-<script src="assets/templates/presets.js?v=e2a12e6c"></script>
-<script src="app.js?v=e2a12e6c"></script>
+<script src="assets/templates/presets.js?v=7bf93195"></script>
+<script src="app.js?v=7bf93195"></script>
 </body>
 </html>
